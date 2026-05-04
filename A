@@ -1,6 +1,9 @@
 -- // Fluent GUI Script
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+-- FIXED: Added these two missing lines so SaveManager actually works
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
-local Fluent            = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -10,9 +13,6 @@ local LPN = LP.Name
 -- =============================================
 -- HELPERS
 -- =============================================
-
--- Find the plot whose Owner value matches the local player
--- Handles both StringValue (Value = "username") and ObjectValue (Value = Player)
 local function GetMyPlot()
     local plots = workspace:FindFirstChild("Plots")
     if not plots then return nil end
@@ -20,14 +20,8 @@ local function GetMyPlot()
         local owner = plot:FindFirstChild("Owner")
         if owner then
             local val = owner.Value
-            -- StringValue: Value is the username string directly
-            if type(val) == "string" and val == LPN then
-                return plot
-            end
-            -- ObjectValue: Value is the Player instance
-            if typeof(val) == "Instance" and val == LP then
-                return plot
-            end
+            if type(val) == "string" and val == LPN then return plot end
+            if typeof(val) == "Instance" and val == LP then return plot end
         end
     end
     return nil
@@ -36,7 +30,6 @@ end
 -- =============================================
 -- WINDOW
 -- =============================================
-
 local Window = Fluent:CreateWindow({
     Title       = "Be A Streamer",
     SubTitle    = "By Oorbits",
@@ -47,24 +40,20 @@ local Window = Fluent:CreateWindow({
     MinimizeKey = Enum.KeyCode.LeftControl,
 })
 
+local Options = Fluent.Options -- Added to allow SaveManager to track values
+
 -- =============================================
 -- TAB: MAIN
 -- =============================================
 local MainTab = Window:AddTab({ Title = "Main", Icon = "home" })
-
--- ── Inf Money ────────────────────────────────
-local infMoneyOn = false
 
 MainTab:AddToggle("InfMoney", {
     Title       = "Dupes Money",
     Description = "Dupes money",
     Default     = false,
     Callback    = function(state)
-        infMoneyOn = state
-        if not state then return end
         task.spawn(function()
-            while infMoneyOn do
-                -- 0) Touch the Cheap Streaming Setup button first
+            while Options.InfMoney.Value do -- Changed to use Options for better saving
                 pcall(function()
                     local plot = GetMyPlot()
                     if plot then
@@ -81,113 +70,100 @@ MainTab:AddToggle("InfMoney", {
                     end
                 end)
 
-                -- 1) startStream
-                pcall(function()
-                    ReplicatedStorage:WaitForChild("StreamingEvent"):FireServer("startStream")
-                end)
+                ReplicatedStorage:WaitForChild("StreamingEvent"):FireServer("startStream")
 
-                -- 2) segmentStreamed × 100 in one second
                 for i = 1, 100 do
-                    if not infMoneyOn then break end
-                    pcall(function()
-                        ReplicatedStorage:WaitForChild("StreamingEvent"):FireServer("segmentStreamed")
-                    end)
+                    if not Options.InfMoney.Value then break end
+                    ReplicatedStorage:WaitForChild("StreamingEvent"):FireServer("segmentStreamed")
                     task.wait(0)
                 end
 
-                -- 3) endStream then immediately loop
-                pcall(function()
-                    ReplicatedStorage:WaitForChild("StreamingEvent"):FireServer("endStream")
-                end)
-
-                -- 0 second gap before next loop
+                ReplicatedStorage:WaitForChild("StreamingEvent"):FireServer("endStream")
                 task.wait()
             end
         end)
     end,
 })
 
--- ── Auto Collect ─────────────────────────────
-local autoCollectOn = false
-
 MainTab:AddToggle("AutoCollect", {
     Title       = "Auto Collect",
-    Description = "Get MailBox as fast as possible.",
     Default     = false,
     Callback    = function(state)
-        autoCollectOn = state
-        if not state then return end
         task.spawn(function()
-            while autoCollectOn do
-                pcall(function()
-                    ReplicatedStorage:WaitForChild("GetMailBox"):FireServer()
-                end)
+            while Options.AutoCollect.Value do
+                pcall(function() ReplicatedStorage:WaitForChild("GetMailBox"):FireServer() end)
                 task.wait(0.01)
             end
         end)
     end,
 })
-
--- ── Auto Rebirth ──────────────────────────────
-local autoRebirthOn = false
 
 MainTab:AddToggle("AutoRebirth", {
     Title       = "Auto Rebirth",
-    Description = "Rebirth as fast as possible.",
     Default     = false,
     Callback    = function(state)
-        autoRebirthOn = state
-        if not state then return end
         task.spawn(function()
-            while autoRebirthOn do
-                pcall(function()
-                    ReplicatedStorage:WaitForChild("Rebirth"):FireServer()
-                end)
+            while Options.AutoRebirth.Value do
+                pcall(function() ReplicatedStorage:WaitForChild("Rebirth"):FireServer() end)
                 task.wait(0.01)
             end
         end)
     end,
 })
 
--- ── Auto Buy ──────────────────────────────────
-local autoBuyOn = false
-
 MainTab:AddToggle("AutoBuy", {
     Title       = "Auto Buy",
-    Description = "Buy all buttons in your plot.",
     Default     = false,
     Callback    = function(state)
-        autoBuyOn = state
-        if not state then return end
         task.spawn(function()
-            while autoBuyOn do
+            while Options.AutoBuy.Value do
                 local plot = GetMyPlot()
                 if plot then
                     local activeButtons = plot:FindFirstChild("ActiveButtons")
                     if activeButtons then
                         for _, item in ipairs(activeButtons:GetChildren()) do
-                            if not autoBuyOn then break end
-                            -- Each item has a Button child with a TouchInterest
+                            if not Options.AutoBuy.Value then break end
                             local button = item:FindFirstChild("Button")
                             if button then
-                                local char = LP.Character
-                                local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+                                local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
                                 if hrp and button:FindFirstChild("TouchInterest") then
-                                    pcall(function()
-                                        firetouchinterest(button, hrp, 0) -- touch begin
-                                        firetouchinterest(button, hrp, 1) -- touch end
-                                    end)
+                                    firetouchinterest(button, hrp, 0)
+                                    firetouchinterest(button, hrp, 1)
                                 end
                             end
                         end
                     end
                 end
-                task.wait(0)
+                task.wait(0.5)
             end
         end)
     end,
 })
 
 -- =============================================
+-- SETTINGS TAB (REQUIRED FOR SAVEMANAGER)
+-- =============================================
+local SettingsTab = Window:AddTab({ Title = "Settings", Icon = "settings" })
+
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({})
+
+InterfaceManager:SetFolder("OorbitsHub")
+SaveManager:SetFolder("OorbitsHub/BeAStreamer")
+
+-- FIXED: Changed 'Tabs.Settings' to 'SettingsTab' to match your variable
+InterfaceManager:BuildInterfaceSection(SettingsTab)
+SaveManager:BuildConfigSection(SettingsTab)
+
 Window:SelectTab(1)
-Fluent:Notify({ Title = "Loaded", Content = "Welcome " .. LPN .. "!", Duration = 4 })
+
+Fluent:Notify({
+    Title = "Fluent",
+    Content = "The script has been loaded.",
+    Duration = 5
+})
+
+SaveManager:LoadAutoloadConfig()
